@@ -1,0 +1,5 @@
+#!/bin/sh
+# 检查是否有changeset（可选）
+if git diff --cached --name-only | grep -q "^packages/"; then
+  echo "提示: 别忘了添加changeset (npm run changeset)"
+fi

@@ -1,0 +1,32 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 0'  # 每周日运行
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # ⭐ 依赖安全审计
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+      
+      # ⭐ 代码安全扫描
+      - name: CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, typescript
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+      
+      # ⭐ 检查依赖许可证
+      - name: License check
+        run: pnpm exec license-checker --summary

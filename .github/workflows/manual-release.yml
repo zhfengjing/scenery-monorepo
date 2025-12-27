@@ -1,0 +1,56 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to release'
+        required: true
+        type: choice
+        options:
+          - all
+          - '@myorg/ui'
+          - '@myorg/utils'
+          - '@myorg/core'
+      version:
+        description: 'Version bump'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v2
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - run: pnpm install
+      
+      - name: Build
+        run: |
+          if [ "${{ inputs.package }}" = "all" ]; then
+            pnpm turbo run build --filter='./packages/*'
+          else
+            pnpm turbo run build --filter='${{ inputs.package }}'
+          fi
+      
+      - name: Publish
+        run: |
+          if [ "${{ inputs.package }}" = "all" ]; then
+            pnpm changeset publish
+          else
+            pnpm publish --filter='${{ inputs.package }}' --no-git-checks
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

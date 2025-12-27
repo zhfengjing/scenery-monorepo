@@ -1,0 +1,123 @@
+name: Complete CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+# 设置权限
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  # Job 1: 代码质量检查
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          cache: 'pnpm'
+      
+      - run: pnpm install
+      - run: pnpm run lint
+      - run: pnpm run type-check
+      
+      # 代码覆盖率
+      - name: Test with coverage
+        run: pnpm run test:coverage
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/coverage-final.json
+  
+  # Job 2: 构建和测试
+  build:
+    needs: quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          cache: 'pnpm'
+      
+      - name: Setup Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ github.sha }}
+          restore-keys: turbo-
+      
+      - run: pnpm install
+      
+      - name: Build
+        run: pnpm turbo run build
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      
+      - name: Test
+        run: pnpm turbo run test
+  
+  # Job 3: 发布（仅main分支）
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - run: pnpm install
+      - run: pnpm turbo run build --filter='./packages/*'
+      
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  
+  # Job 4: 部署应用
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+      
+      - run: pnpm install
+      - run: pnpm turbo run build --filter='web'
+      
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./apps/web
+```
+
+## 9. 必需的Secrets配置
+
+在GitHub仓库设置中添加：
+```
+Settings → Secrets and variables → Actions

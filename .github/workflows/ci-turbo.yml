@@ -1,0 +1,49 @@
+name: CI with Turborepo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Turborepo需要比较变更
+      
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      # ⭐ Turborepo远程缓存
+      - name: Setup Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+      
+      # ⭐ 只构建改动的包
+      - name: Build
+        run: pnpm turbo run build --filter='[HEAD^1]'
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}  # Vercel远程缓存
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      
+      - name: Test
+        run: pnpm turbo run test --filter='[HEAD^1]'
+      
+      - name: Lint
+        run: pnpm turbo run lint --filter='[HEAD^1]'

@@ -1,0 +1,44 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: pnpm/action-setup@v2
+      
+      - uses: actions/setup-node@v4
+      
+      - run: pnpm install
+      
+      # ⭐ 检查是否有changeset（如果修改了packages）
+      - name: Check for changeset
+        if: |
+          github.event_name == 'pull_request' &&
+          contains(github.event.pull_request.labels.*.name, 'skip-changeset') == false
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^packages/'; then
+            if [ -z "$(ls .changeset/*.md 2>/dev/null | grep -v README)" ]; then
+              echo "Error: Changes to packages/ require a changeset"
+              echo "Run: pnpm changeset"
+              exit 1
+            fi
+          fi
+      
+      # ⭐ 只测试改动的包
+      - name: Test changed packages
+        run: pnpm turbo run test --filter='...[origin/${{ github.base_ref }}]'
+      
+      # ⭐ 检查包大小
+      - name: Size check
+        uses: andresz1/size-limit-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}

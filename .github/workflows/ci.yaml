@@ -1,0 +1,67 @@
+name: CI
+
+# 触发条件
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# 并发控制
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 代码检查和测试
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. 检出代码
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史，Turborepo需要
+      
+      # 2. 设置Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'  # 或 'npm' / 'yarn'
+      
+      # 3. 安装pnpm
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      # 4. 安装依赖
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      # 5. 代码检查
+      - name: Lint
+        run: pnpm run lint
+      
+      # 6. 类型检查
+      - name: Type check
+        run: pnpm run type-check
+      
+      # 7. 运行测试
+      - name: Test
+        run: pnpm run test
+      
+      # 8. 构建
+      - name: Build
+        run: pnpm run build
+      
+      # 9. 上传构建产物（可选）
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            packages/*/dist
+            apps/*/dist
